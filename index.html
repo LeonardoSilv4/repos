@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="description" content="Aplicativo PWA para cadastro de produtos e atualização rápida de estoque com geração de código de barras." />
+  <title>Estoque Rápido PWA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    input, textarea {
+      user-select: text;
+    }
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Animações suaves de transição */
+    .fade-in {
+      animation: fadeIn 0.2s ease-out forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* Estilo do input de atualização rápida */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      opacity: 1;
+      height: 40px;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col">
+
+  <!-- Cabeçalho Superior -->
+  <header class="bg-slate-900 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-lg mx-auto px-4 py-3.5 flex items-center justify-between">
+      <button onclick="navigateTo('home')" class="flex items-center gap-2.5 text-left focus:outline-none">
+        <div class="bg-emerald-500 text-slate-950 p-2 rounded-xl shadow-inner">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="font-bold text-base leading-tight tracking-tight">Estoque Rápido</h1>
+          <p class="text-[11px] text-slate-400 font-medium" id="header-status">Modo Offline Pronto</p>
+        </div>
+      </button>
+
+      <div class="flex items-center gap-2">
+        <span id="badge-total-items" class="bg-slate-800 border border-slate-700 text-emerald-400 text-xs font-bold px-2.5 py-1 rounded-full">
+          0 itens
+        </span>
+        <button id="btn-install-pwa" class="hidden bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold px-3 py-1.5 rounded-lg transition active:scale-95">
+          Instalar App
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Toast / Notificação Flutuante -->
+  <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md pointer-events-none flex flex-col gap-2"></div>
+
+  <!-- Conteúdo Principal -->
+  <main class="flex-1 max-w-lg w-full mx-auto p-4 flex flex-col">
+
+    <!-- ==================== TELA 1: MENU PRINCIPAL ==================== -->
+    <section id="view-home" class="fade-in flex-1 flex flex-col justify-between gap-5">
+      <div class="space-y-3 mt-1">
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Resumo do Inventário</p>
+          <div class="grid grid-cols-2 gap-3 mt-2">
+            <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+              <span class="text-xs text-slate-500 block">Produtos Cadastrados</span>
+              <span id="stat-products" class="text-2xl font-extrabold text-slate-900">0</span>
+            </div>
+            <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+              <span class="text-xs text-slate-500 block">Total de Unidades</span>
+              <span id="stat-units" class="text-2xl font-extrabold text-emerald-600">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botão Destaque: Atualizar Quantidade -->
+        <button onclick="startAuditMode()" class="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-2xl p-5 shadow-lg shadow-emerald-600/20 transition flex items-center justify-between text-left group">
+          <div class="flex items-center gap-4">
+            <div class="bg-white/15 p-3.5 rounded-xl">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+              </svg>
+            </div>
+            <div>
+              <span class="block font-extrabold text-lg leading-snug">Atualizar Quantidade</span>
+              <span class="block text-emerald-100 text-xs mt-0.5">Conferência rápida um produto por vez</span>
+            </div>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-emerald-200 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+        </button>
+
+        <!-- Botão: Cadastrar Produto -->
+        <button onclick="navigateTo('register')" class="w-full bg-white hover:bg-slate-50 active:scale-[0.99] text-slate-900 rounded-2xl p-5 shadow-sm border border-slate-200 transition flex items-center justify-between text-left group">
+          <div class="flex items-center gap-4">
+            <div class="bg-blue-50 text-blue-600 p-3.5 rounded-xl">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>
+              </svg>
+            </div>
+            <div>
+              <span class="block font-bold text-lg leading-snug">Cadastrar Produto</span>
+              <span class="block text-slate-500 text-xs mt-0.5">Adicionar nome, unidades e código de barras</span>
+            </div>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-slate-400 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+        </button>
+
+        <!-- Botão: Lista e Backup -->
+        <button onclick="navigateTo('list')" class="w-full bg-white hover:bg-slate-50 active:scale-[0.99] text-slate-900 rounded-2xl p-5 shadow-sm border border-slate-200 transition flex items-center justify-between text-left group">
+          <div class="flex items-center gap-4">
+            <div class="bg-amber-50 text-amber-600 p-3.5 rounded-xl">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+              </svg>
+            </div>
+            <div>
+              <span class="block font-bold text-lg leading-snug">Produtos Cadastrados</span>
+              <span class="block text-slate-500 text-xs mt-0.5">Consultar lista, excluir ou exportar backup</span>
+            </div>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-slate-400 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Rodapé discreto com opção de dados de exemplo caso esteja vazio -->
+      <div id="empty-helper-box" class="hidden bg-slate-200/70 rounded-xl p-3.5 text-center">
+        <p class="text-xs text-slate-600 mb-2">Nenhum produto cadastrado ainda.</p>
+        <button onclick="seedSampleProducts()" class="text-xs font-bold text-blue-700 hover:underline">
+          + Inserir 3 produtos de exemplo para testar
+        </button>
+      </div>
+    </section>
+
+    <!-- ==================== TELA 2: CADASTRAR PRODUTO ==================== -->
+    <section id="view-register" class="hidden fade-in flex-1 flex flex-col">
+      <div class="flex items-center justify-between mb-4">
+        <button onclick="navigateTo('home')" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900 py-1.5 px-2 -ml-2 rounded-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          Voltar ao Menu
+        </button>
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">Novo Cadastro</span>
+      </div>
+
+      <form id="form-register" onsubmit="handleRegisterSubmit(event)" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+        <div>
+          <label for="reg-name" class="block text-sm font-bold text-slate-700 mb-1.5">Nome do Produto *</label>
+          <input type="text" id="reg-name" required placeholder="Ex: Café Torrado 500g" autocomplete="off"
+            class="w-full px-4 py-3.5 rounded-xl border border-slate-300 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" />
+        </div>
+
+        <div>
+          <label for="reg-qty" class="block text-sm font-bold text-slate-700 mb-1.5">Quantidade (Unidades) *</label>
+          <input type="number" id="reg-qty" required min="0" step="1" inputmode="numeric" placeholder="Ex: 24"
+            class="w-full px-4 py-3.5 rounded-xl border border-slate-300 text-base font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" />
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="reg-barcode" class="block text-sm font-bold text-slate-700">Código de Barras *</label>
+            <button type="button" onclick="generateRandomEAN13()" class="text-xs font-semibold text-blue-600 hover:text-blue-800">
+              Gerar EAN-13 aleatório
+            </button>
+          </div>
+          <input type="text" id="reg-barcode" required placeholder="Ex: 7891000100103" autocomplete="off"
+            oninput="updateRegisterBarcodePreview()"
+            class="w-full px-4 py-3.5 rounded-xl border border-slate-300 font-mono-code text-base font-bold tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" />
+        </div>
+
+        <!-- Pré-visualização em tempo real do código de barras -->
+        <div class="bg-white border-2 border-slate-200 rounded-xl p-3 flex flex-col items-center justify-center min-h-[140px]">
+          <span class="text-[10px] uppercase tracking-widest text-slate-400 font-semibold mb-1.5">Pré-visualização do Código</span>
+          <div id="reg-barcode-preview" class="w-full flex flex-col items-center justify-center">
+            <span class="text-xs text-slate-400 italic">Digite o código acima para gerar as barras</span>
+          </div>
+        </div>
+
+        <div class="pt-2 flex flex-col gap-2.5">
+          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-base py-4 rounded-xl shadow-md shadow-blue-600/20 transition">
+            Salvar Produto
+          </button>
+          <button type="button" onclick="navigateTo('home')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm py-3 rounded-xl transition">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ==================== TELA 3: ATUALIZAR QUANTIDADE (UM POR VEZ) ==================== -->
+    <section id="view-audit" class="hidden fade-in flex-1 flex flex-col justify-between">
+      <div>
+        <!-- Barra de progresso discreta -->
+        <div class="flex items-center justify-between mb-1.5 px-1">
+          <span id="audit-counter" class="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+            Produto 1 de 1
+          </span>
+          <span id="audit-saved-badge" class="hidden text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+            ✓ Salvo
+          </span>
+        </div>
+
+        <!-- Barra visual de progresso -->
+        <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mb-3">
+          <div id="audit-progress-bar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+
+        <!-- Card Principal do Produto Atual -->
+        <div class="bg-white rounded-3xl p-4 sm:p-5 shadow-md border border-slate-200 flex flex-col items-center text-center">
+          
+          <!-- 1. Nome do Produto Cadastrado -->
+          <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">Produto</span>
+          <h2 id="audit-product-name" class="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight mb-3 break-words w-full">
+            Nome do Produto
+          </h2>
+
+          <!-- 2. Código de Barras Visual Grande (Otimizado para Leitor Óptico / Coletor) -->
+          <div class="w-full bg-[#ffffff] border-2 border-slate-300 rounded-2xl py-3 px-1 mb-4 flex flex-col items-center justify-center shadow-xs">
+            <div id="audit-barcode-visual" class="w-full flex justify-center items-center overflow-hidden"></div>
+            <p id="audit-barcode-number" class="font-mono-code text-lg sm:text-xl font-extrabold tracking-[0.2em] text-[#000000] mt-1.5 select-all">
+              0000000000000
+            </p>
+          </div>
+
+          <!-- 3. Caixa para inserir a nova quantidade (Focada e Selecionada automaticamente) -->
+          <div class="w-full">
+            <label for="audit-qty-input" class="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+              Nova Quantidade (Unidades)
+            </label>
+            <input
+              type="number"
+              id="audit-qty-input"
+              inputmode="numeric"
+              min="0"
+              step="1"
+              onkeydown="handleAuditInputKey(event)"
+              class="w-full text-center text-4xl font-extrabold text-slate-900 bg-slate-50 border-2 border-emerald-500 rounded-2xl py-3 px-4 focus:outline-none focus:ring-4 focus:ring-emerald-500/25 focus:bg-white transition"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Os 4 Botões Exatos Solicitados: Cancelar, Salvar, Voltar, Avançar -->
+      <div class="mt-3.5 space-y-2.5 pb-2">
+        <!-- Linha 1: Voltar e Avançar -->
+        <div class="grid grid-cols-2 gap-3">
+          <button type="button" id="btn-audit-prev" onclick="auditPrev()"
+            class="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 border-2 border-slate-300 font-bold text-base py-4 rounded-2xl shadow-sm transition disabled:opacity-40 disabled:pointer-events-none">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Voltar
+          </button>
+
+          <button type="button" id="btn-audit-next" onclick="auditNext()"
+            class="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-800 border-2 border-slate-300 font-bold text-base py-4 rounded-2xl shadow-sm transition disabled:opacity-40 disabled:pointer-events-none">
+            Avançar
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+
+        <!-- Linha 2: Cancelar e Salvar -->
+        <div class="grid grid-cols-2 gap-3">
+          <button type="button" id="btn-audit-cancel" onclick="auditCancel()"
+            class="flex items-center justify-center gap-2 bg-rose-100 hover:bg-rose-200 active:scale-[0.98] text-rose-800 border border-rose-200 font-extrabold text-base py-4 rounded-2xl transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            Cancelar
+          </button>
+
+          <button type="button" id="btn-audit-save" onclick="auditSave()"
+            class="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold text-base py-4 rounded-2xl shadow-lg shadow-emerald-600/25 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Salvar
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TELA 4: LISTA / GERENCIAR PRODUTOS ==================== -->
+    <section id="view-list" class="hidden fade-in flex-1 flex flex-col">
+      <div class="flex items-center justify-between mb-3">
+        <button onclick="navigateTo('home')" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900 py-1.5 px-2 -ml-2 rounded-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          Menu
+        </button>
+
+        <div class="flex items-center gap-1.5">
+          <button onclick="exportBackupJSON()" class="text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-800 px-3 py-1.5 rounded-lg transition">
+            Exportar JSON
+          </button>
+          <label class="text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-800 px-3 py-1.5 rounded-lg transition cursor-pointer">
+            Importar
+            <input type="file" accept=".json" onchange="importBackupJSON(event)" class="hidden" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Barra de busca rápida -->
+      <div class="mb-3">
+        <input type="search" id="list-search" oninput="renderProductList()" placeholder="Buscar por nome ou código de barras..."
+          class="w-full px-4 py-3 rounded-xl bg-white border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900" />
+      </div>
+
+      <!-- Container da Lista -->
+      <div id="product-list-container" class="space-y-2.5 flex-1 overflow-y-auto pb-6"></div>
+    </section>
+
+  </main>
+
+  <!-- Modal Customizado de Confirmação (Sem usar window.confirm) -->
+  <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 fade-in">
+      <h3 id="confirm-modal-title" class="text-lg font-extrabold text-slate-900 mb-1">Confirmar ação</h3>
+      <p id="confirm-modal-msg" class="text-sm text-slate-600 mb-5">Deseja realmente prosseguir?</p>
+      <div class="grid grid-cols-2 gap-2.5">
+        <button id="confirm-modal-cancel" class="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-sm transition">
+          Não, voltar
+        </button>
+        <button id="confirm-modal-ok" class="py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm transition">
+          Sim, confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================================
+       1. GERENCIAMENTO DE ESTADO E ARMAZENAMENTO LOCAL (localStorage)
+       ============================================================================ */
+    const STORAGE_KEY = 'estoque_rapido_pwa_produtos_v1';
+    let products = [];
+    let currentAuditIndex = 0;
+
+    function loadProducts() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        products = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(products)) products = [];
+      } catch (err) {
+        console.error('Erro ao ler localStorage:', err);
+        products = [];
+      }
+      updateDashboardStats();
+    }
+
+    function saveProductsToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+        updateDashboardStats();
+      } catch (err) {
+        showToast('Erro ao salvar no armazenamento local!', 'error');
+      }
+    }
+
+    function updateDashboardStats() {
+      const totalProducts = products.length;
+      const totalUnits = products.reduce((sum, item) => sum + (parseInt(item.quantity, 10) || 0), 0);
+
+      document.getElementById('stat-products').textContent = totalProducts;
+      document.getElementById('stat-units').textContent = totalUnits;
+      document.getElementById('badge-total-items').textContent = `${totalProducts} ${totalProducts === 1 ? 'item' : 'itens'}`;
+
+      const emptyHelper = document.getElementById('empty-helper-box');
+      if (totalProducts === 0) {
+        emptyHelper.classList.remove('hidden');
+      } else {
+        emptyHelper.classList.add('hidden');
+      }
+    }
+
+    /* ============================================================================
+       2. NAVEGAÇÃO ENTRE TELAS E FEEDBACK VISUAL (TOAST & MODAL)
+       ============================================================================ */
+    function navigateTo(viewName) {
+      const views = ['home', 'register', 'audit', 'list'];
+      views.forEach(v => {
+        const el = document.getElementById(`view-${v}`);
+        if (el) el.classList.add('hidden');
+      });
+
+      const target = document.getElementById(`view-${viewName}`);
+      if (target) {
+        target.classList.remove('hidden');
+      }
+
+      if (viewName === 'home') {
+        updateDashboardStats();
+      } else if (viewName === 'register') {
+        document.getElementById('form-register').reset();
+        updateRegisterBarcodePreview();
+        setTimeout(() => document.getElementById('reg-name').focus(), 80);
+      } else if (viewName === 'list') {
+        document.getElementById('list-search').value = '';
+        renderProductList();
+      }
+    }
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-slate-900 text-white border-emerald-500',
+        error: 'bg-rose-600 text-white border-rose-800',
+        info: 'bg-blue-600 text-white border-blue-800'
+      };
+      toast.className = `${colors[type] || colors.success} border-l-4 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold flex items-center justify-between fade-in`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.25s ease';
+        setTimeout(() => toast.remove(), 260);
+      }, 2400);
+    }
+
+    function openConfirmModal(title, message, onConfirm) {
+      const modal = document.getElementById('confirm-modal');
+      document.getElementById('confirm-modal-title').textContent = title;
+      document.getElementById('confirm-modal-msg').textContent = message;
+      modal.classList.remove('hidden');
+
+      const btnOk = document.getElementById('confirm-modal-ok');
+      const btnCancel = document.getElementById('confirm-modal-cancel');
+
+      const cleanup = () => {
+        modal.classList.add('hidden');
+        btnOk.onclick = null;
+        btnCancel.onclick = null;
+      };
+
+      btnCancel.onclick = cleanup;
+      btnOk.onclick = () => {
+        cleanup();
+        onConfirm();
+      };
+    }
+
+    /* ============================================================================
+       3. GERADOR NATIVO DE CÓDIGO DE BARRAS EM SVG (EAN-13, EAN-8 E CODE 128B)
+       ============================================================================ */
+    const EAN_L = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+    const EAN_G = ['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'];
+    const EAN_R = ['1110010','1100110','1101100','1000010','1011100','1001110','1010000','1000100','1001000','1110100'];
+    const EAN13_PARITY = ['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'];
+
+    // Padrões Code 128 (Tabela B - caracteres ASCII 32 a 126)
+    const CODE128_PATTERNS = [
+      "212222","222122","222221","121223","121322","131222","122213","122312","132212","221213",
+      "221312","231212","112232","122132","122231","113222","123122","123221","223211","221132",
+      "221231","213212","223112","312131","311222","321122","321221","312212","322112","322211",
+      "212123","212321","232121","111323","131123","131321","112313","132113","132311","211313",
+      "231113","231311","112133","112331","132131","113123","113321","133121","313121","211331",
+      "231131","213113","213311","213131","311123","311321","331121","312113","312311","332111",
+      "314111","221411","431111","111224","111422","121124","121421","141122","141221","112214",
+      "112412","122114","122411","142112","142211","241211","221114","413111","241112","134111",
+      "111242","121142","121241","114212","124112","124211","411212","421112","421211","212141",
+      "214121","412121","111143","111341","131141","114113","114311","411113","411311","113141",
+      "114131","311141","411131","211412","211214","211232","2331112"
+    ];
+
+    function encodeEAN13(code) {
+      const first = parseInt(code[0], 10);
+      const parity = EAN13_PARITY[first];
+      let bits = '101'; // Guarda inicial
+      for (let i = 1; i <= 6; i++) {
+        const d = parseInt(code[i], 10);
+        bits += parity[i - 1] === 'L' ? EAN_L[d] : EAN_G[d];
+      }
+      bits += '01010'; // Guarda central
+      for (let i = 7; i <= 12; i++) {
+        const d = parseInt(code[i], 10);
+        bits += EAN_R[d];
+      }
+      bits += '101'; // Guarda final
+      return bits;
+    }
+
+    function encodeEAN8(code) {
+      let bits = '101';
+      for (let i = 0; i < 4; i++) {
+        bits += EAN_L[parseInt(code[i], 10)];
+      }
+      bits += '01010';
+      for (let i = 4; i < 8; i++) {
+        bits += EAN_R[parseInt(code[i], 10)];
+      }
+      bits += '101';
+      return bits;
+    }
+
+    function encodeCode128B(text) {
+      // Start B = 104
+      let codes = [104];
+      let checksum = 104;
+      for (let i = 0; i < text.length; i++) {
+        let charCode = text.charCodeAt(i);
+        if (charCode < 32 || charCode > 126) charCode = 32; // Fallback espaço
+        const val = charCode - 32;
+        codes.push(val);
+        checksum += val * (i + 1);
+      }
+      codes.push(checksum % 103);
+      codes.push(106); // Stop
+
+      let bits = '';
+      codes.forEach(c => {
+        const pattern = CODE128_PATTERNS[c];
+        for (let j = 0; j < pattern.length; j++) {
+          const width = parseInt(pattern[j], 10);
+          const isBar = (j % 2 === 0);
+          bits += (isBar ? '1' : '0').repeat(width);
+        }
+      });
+      return bits;
+    }
+
+    function renderBarcodeSVG(rawCode, height = 74) {
+      const clean = String(rawCode || '').trim();
+      if (!clean) return '';
+
+      let bits = '';
+      let formatLabel = 'CODE 128';
+
+      if (/^\d{13}$/.test(clean)) {
+        bits = encodeEAN13(clean);
+        formatLabel = 'EAN-13';
+      } else if (/^\d{8}$/.test(clean)) {
+        bits = encodeEAN8(clean);
+        formatLabel = 'EAN-8';
+      } else {
+        bits = encodeCode128B(clean);
+        formatLabel = 'CODE 128';
+      }
+
+      const quietZone = 8;
+      const totalModules = bits.length + quietZone * 2;
+      let rects = '';
+
+      // Agrupa barras pretas contíguas para SVG nítido sem serrilhado
+      let i = 0;
+      while (i < bits.length) {
+        if (bits[i] === '1') {
+          let run = 1;
+          while (i + run < bits.length && bits[i + run] === '1') {
+            run++;
+          }
+          // Barras de guarda do EAN são ligeiramente mais longas
+          const isGuard = (formatLabel.startsWith('EAN') && (i < 3 || i >= bits.length - 3 || (i > bits.length/2 - 3 && i < bits.length/2 + 3)));
+          const barH = isGuard ? height + 6 : height;
+          rects += `<rect x="${quietZone + i}" y="0" width="${run}" height="${barH}" fill="#0f172a"/>`;
+          i += run;
+        } else {
+          i++;
+        }
+      }
+
+      const svgHeight = formatLabel.startsWith('EAN') ? height + 6 : height;
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalModules} ${svgHeight}" class="w-full max-w-[290px] h-auto max-h-[84px]" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Código de barras ${clean}">
+          <rect x="0" y="0" width="${totalModules}" height="${svgHeight}" fill="#ffffff"/>
+          ${rects}
+        </svg>
+      `;
+    }
+
+    function generateRandomEAN13() {
+      // Prefixo Brasil 789 + 9 dígitos aleatórios + dígito verificador módulo 10
+      let base = '789';
+      for (let i = 0; i < 9; i++) {
+        base += Math.floor(Math.random() * 10);
+      }
+      let sum = 0;
+      for (let i = 0; i < 12; i++) {
+        sum += parseInt(base[i], 10) * (i % 2 === 0 ? 1 : 3);
+      }
+      const checkDigit = (10 - (sum % 10)) % 10;
+      const input = document.getElementById('reg-barcode');
+      input.value = base + checkDigit;
+      updateRegisterBarcodePreview();
+    }
+
+    function updateRegisterBarcodePreview() {
+      const code = document.getElementById('reg-barcode').value.trim();
+      const preview = document.getElementById('reg-barcode-preview');
+      if (!code) {
+        preview.innerHTML = `<span class="text-xs text-slate-400 italic">Digite o código acima para gerar as barras</span>`;
+        return;
+      }
+      preview.innerHTML = `
+        ${renderBarcodeSVG(code, 56)}
+        <span class="font-mono-code text-xs font-bold tracking-widest text-slate-800 mt-1">${escapeHTML(code)}</span>
+      `;
+    }
+
+    function renderBarcodeSVG(rawCode, height = 150, maxHeightClass = 'max-h-[165px]') {
+      const clean = String(rawCode || '').trim();
+      if (!clean) return '';
+
+      let bits = '';
+      let formatLabel = 'CODE 128';
+
+      if (/^\d{13}$/.test(clean)) {
+        bits = encodeEAN13(clean);
+        formatLabel = 'EAN-13';
+      } else if (/^\d{8}$/.test(clean)) {
+        bits = encodeEAN8(clean);
+        formatLabel = 'EAN-8';
+      } else {
+        bits = encodeCode128B(clean);
+        formatLabel = 'CODE 128';
+      }
+
+      // Zona de silêncio ampla (quiet zone) nas laterais e multiplicador de largura para nitidez em leitores ópticos
+      const barWidth = 3;
+      const quietZone = 14 * barWidth;
+      const totalWidth = (bits.length * barWidth) + (quietZone * 2);
+      let rects = '';
+
+      // Agrupa barras pretas contíguas para SVG nítido sem antialiasing/borrão
+      let i = 0;
+      while (i < bits.length) {
+        if (bits[i] === '1') {
+          let run = 1;
+          while (i + run < bits.length && bits[i + run] === '1') {
+            run++;
+          }
+          // Barras de guarda do EAN são ligeiramente mais longas
+          const isGuard = (formatLabel.startsWith('EAN') && (i < 3 || i >= bits.length - 3 || (i > bits.length/2 - 3 && i < bits.length/2 + 3)));
+          const barH = isGuard ? height + 10 : height;
+          rects += `<rect x="${quietZone + (i * barWidth)}" y="2" width="${run * barWidth}" height="${barH}" fill="#000000"/>`;
+          i += run;
+        } else {
+          i++;
+        }
+      }
+
+      const svgHeight = (formatLabel.startsWith('EAN') ? height + 10 : height) + 4;
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${svgHeight}" shape-rendering="crispEdges" class="w-full h-auto ${maxHeightClass} block" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Código de barras ${clean}">
+          <rect x="0" y="0" width="${totalWidth}" height="${svgHeight}" fill="#ffffff"/>
+          ${rects}
+        </svg>
+      `;
+    }
+// ... existing code ... -->
+    function updateRegisterBarcodePreview() {
+      const code = document.getElementById('reg-barcode').value.trim();
+      const preview = document.getElementById('reg-barcode-preview');
+      if (!code) {
+        preview.innerHTML = `<span class="text-xs text-slate-400 italic">Digite o código acima para gerar as barras</span>`;
+        return;
+      }
+      preview.innerHTML = `
+        ${renderBarcodeSVG(code, 105, 'max-h-[115px]')}
+        <span class="font-mono-code text-sm font-extrabold tracking-widest text-[#000000] mt-1">${escapeHTML(code)}</span>
+      `;
+    }
+
+    /* ============================================================================
+       4. TELA DE CADASTRO DE PRODUTOS
+       ============================================================================ */
+    function handleRegisterSubmit(event) {
+      event.preventDefault();
+      const name = document.getElementById('reg-name').value.trim();
+      const qtyRaw = document.getElementById('reg-qty').value;
+      const barcode = document.getElementById('reg-barcode').value.trim();
+
+      if (!name || !barcode || qtyRaw === '') {
+        showToast('Preencha todos os campos obrigatórios.', 'error');
+        return;
+      }
+
+      const quantity = Math.max(0, parseInt(qtyRaw, 10) || 0);
+
+      const newProduct = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        name,
+        quantity,
+        barcode,
+        updatedAt: new Date().toISOString()
+      };
+
+      products.push(newProduct);
+      saveProductsToStorage();
+      showToast(`"${name}" cadastrado com sucesso!`);
+
+      document.getElementById('form-register').reset();
+      updateRegisterBarcodePreview();
+      document.getElementById('reg-name').focus();
+    }
+
+    /* ============================================================================
+       5. TELA DE ATUALIZAR QUANTIDADE (UM PRODUTO POR VEZ)
+       ============================================================================ */
+    function startAuditMode(startIndex = 0) {
+      if (products.length === 0) {
+        showToast('Cadastre ao menos um produto antes de atualizar.', 'info');
+        navigateTo('register');
+        return;
+      }
+      currentAuditIndex = Math.max(0, Math.min(startIndex, products.length - 1));
+      navigateTo('audit');
+      renderAuditItem();
+    }
+
+    function renderAuditItem() {
+      const total = products.length;
+      if (total === 0) {
+        navigateTo('home');
+        return;
+      }
+
+      const item = products[currentAuditIndex];
+
+      // Contador e barra de progresso
+      document.getElementById('audit-counter').textContent = `Produto ${currentAuditIndex + 1} de ${total}`;
+      const percent = ((currentAuditIndex + 1) / total) * 100;
+      document.getElementById('audit-progress-bar').style.width = `${percent}%`;
+      document.getElementById('audit-saved-badge').classList.add('hidden');
+
+      // Nome do produto cadastrado
+      document.getElementById('audit-product-name').textContent = item.name;
+
+      // Código de barras visual grande (linhas) + número do código de barras
+      document.getElementById('audit-barcode-visual').innerHTML = renderBarcodeSVG(item.barcode, 150, 'max-h-[165px]');
+      document.getElementById('audit-barcode-number').textContent = item.barcode;
+
+      // Caixa de quantidade: preencher valor atual, focar e selecionar automaticamente
+      const qtyInput = document.getElementById('audit-qty-input');
+      qtyInput.value = item.quantity;
+
+      // Estado dos botões Voltar e Avançar
+      document.getElementById('btn-audit-prev').disabled = (currentAuditIndex === 0);
+      document.getElementById('btn-audit-next').disabled = (currentAuditIndex >= total - 1);
+
+      // Foco automático com texto selecionado para digitação imediata
+      requestAnimationFrame(() => {
+        qtyInput.focus();
+        qtyInput.select();
+      });
+    }
+
+    function handleAuditInputKey(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        auditSave();
+      }
+    }
+
+    // Botão 1: Cancelar (cancela a operação e volta ao menu inicial sem salvar alterações pendentes no item atual)
+    function auditCancel() {
+      navigateTo('home');
+      showToast('Atualização cancelada.', 'info');
+    }
+
+    // Botão 2: Salvar (salva a nova quantidade inserida para o produto atual)
+    function auditSave() {
+      const qtyInput = document.getElementById('audit-qty-input');
+      const newQty = parseInt(qtyInput.value, 10);
+
+      if (isNaN(newQty) || newQty < 0) {
+        showToast('Digite uma quantidade válida (0 ou maior).', 'error');
+        qtyInput.focus();
+        qtyInput.select();
+        return;
+      }
+
+      products[currentAuditIndex].quantity = newQty;
+      products[currentAuditIndex].updatedAt = new Date().toISOString();
+      saveProductsToStorage();
+
+      // Feedback visual imediato
+      const savedBadge = document.getElementById('audit-saved-badge');
+      savedBadge.classList.remove('hidden');
+      showToast(`Salvo: ${products[currentAuditIndex].name} (${newQty} un.)`);
+
+      // Mantém foco/seleção ou avança automaticamente se houver próximo
+      if (currentAuditIndex < products.length - 1) {
+        setTimeout(() => {
+          currentAuditIndex++;
+          renderAuditItem();
+        }, 320);
+      } else {
+        setTimeout(() => {
+          qtyInput.focus();
+          qtyInput.select();
+        }, 100);
+      }
+    }
+
+    // Botão 3: Voltar (passa para o produto anterior na lista)
+    function auditPrev() {
+      if (currentAuditIndex > 0) {
+        currentAuditIndex--;
+        renderAuditItem();
+      }
+    }
+
+    // Botão 4: Avançar (passa para o próximo produto na lista)
+    function auditNext() {
+      if (currentAuditIndex < products.length - 1) {
+        currentAuditIndex++;
+        renderAuditItem();
+      }
+    }
+
+    /* ============================================================================
+       6. TELA DE LISTA / GERENCIAR PRODUTOS E BACKUP JSON
+       ============================================================================ */
+    function renderProductList() {
+      const container = document.getElementById('product-list-container');
+      const query = (document.getElementById('list-search').value || '').toLowerCase().trim();
+
+      const filtered = products
+        .map((p, index) => ({ ...p, originalIndex: index }))
+        .filter(p => p.name.toLowerCase().includes(query) || p.barcode.toLowerCase().includes(query));
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white rounded-2xl p-8 text-center border border-slate-200">
+            <p class="text-slate-500 font-medium text-sm">Nenhum produto encontrado.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(item => `
+        <div class="bg-white rounded-2xl p-4 shadow-xs border border-slate-200 flex items-center justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <h3 class="font-bold text-slate-900 text-base truncate">${escapeHTML(item.name)}</h3>
+            <p class="font-mono-code text-xs text-slate-500 mt-0.5">${escapeHTML(item.barcode)}</p>
+          </div>
+
+          <div class="flex items-center gap-2 shrink-0">
+            <button onclick="startAuditMode(${item.originalIndex})" title="Atualizar quantidade deste item"
+              class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-extrabold text-sm px-3 py-2 rounded-xl transition">
+              ${item.quantity} un.
+            </button>
+
+            <button onclick="deleteProduct('${item.id}')" title="Excluir produto"
+              class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function deleteProduct(id) {
+      const target = products.find(p => p.id === id);
+      if (!target) return;
+
+      openConfirmModal(
+        'Excluir Produto',
+        `Deseja remover "${target.name}" do estoque?`,
+        () => {
+          products = products.filter(p => p.id !== id);
+          saveProductsToStorage();
+          renderProductList();
+          showToast('Produto excluído.', 'info');
+        }
+      );
+    }
+
+    function exportBackupJSON() {
+      if (products.length === 0) {
+        showToast('Não há produtos para exportar.', 'error');
+        return;
+      }
+      const dataStr = JSON.stringify(products, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateTag = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `backup-estoque-${dateTag}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Backup JSON baixado!');
+    }
+
+    function importBackupJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (!Array.isArray(imported)) throw new Error('Formato inválido');
+          const validItems = imported.filter(p => p && typeof p.name === 'string' && p.barcode !== undefined);
+          products = validItems.map(p => ({
+            id: p.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+            name: String(p.name).trim(),
+            quantity: Math.max(0, parseInt(p.quantity, 10) || 0),
+            barcode: String(p.barcode).trim(),
+            updatedAt: p.updatedAt || new Date().toISOString()
+          }));
+          saveProductsToStorage();
+          renderProductList();
+          showToast(`${products.length} produtos importados!`);
+        } catch (err) {
+          showToast('Arquivo JSON inválido.', 'error');
+        }
+        event.target.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    function seedSampleProducts() {
+      products = [
+        { id: 'sample1', name: 'Arroz Branco Tipo 1 5kg', quantity: 18, barcode: '7896006711117', updatedAt: new Date().toISOString() },
+        { id: 'sample2', name: 'Feijão Carioca 1kg', quantity: 32, barcode: '7891234567895', updatedAt: new Date().toISOString() },
+        { id: 'sample3', name: 'Café Torrado e Moído 500g', quantity: 14, barcode: '7891000100103', updatedAt: new Date().toISOString() }
+      ];
+      saveProductsToStorage();
+      showToast('3 produtos de exemplo adicionados!');
+    }
+
+    function escapeHTML(str) {
+      return String(str).replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+
+    /* ============================================================================
+       7. CONFIGURAÇÃO DINÂMICA DE PWA (MANIFEST + ÍCONE SVG + SERVICE WORKER)
+       ============================================================================ */
+    function initPWA() {
+      // Ícone SVG embutido codificado em Data URL
+      const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#0f172a"/><rect x="88" y="136" width="28" height="240" rx="6" fill="#10b981"/><rect x="144" y="136" width="16" height="240" rx="6" fill="#ffffff"/><rect x="188" y="136" width="40" height="240" rx="6" fill="#10b981"/><rect x="256" y="136" width="20" height="240" rx="6" fill="#ffffff"/><rect x="304" y="136" width="36" height="240" rx="6" fill="#10b981"/><rect x="368" y="136" width="16" height="240" rx="6" fill="#ffffff"/><rect x="404" y="136" width="24" height="240" rx="6" fill="#10b981"/></svg>`;
+      const iconUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(iconSvg);
+
+      // Apple touch icon
+      const appleLink = document.createElement('link');
+      appleLink.rel = 'apple-touch-icon';
+      appleLink.href = iconUrl;
+      document.head.appendChild(appleLink);
+
+      // Manifest dinâmico via Blob
+      const manifestData = {
+        name: 'Estoque Rápido PWA',
+        short_name: 'EstoquePWA',
+        description: 'Cadastro de produtos e atualização rápida de estoque com código de barras.',
+        start_url: location.href,
+        display: 'standalone',
+        background_color: '#f1f5f9',
+        theme_color: '#0f172a',
+        orientation: 'portrait',
+        icons: [
+          { src: iconUrl, sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: iconUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
+        ]
+      };
+
+      const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/manifest+json' });
+      const manifestLink = document.createElement('link');
+      manifestLink.rel = 'manifest';
+      manifestLink.href = URL.createObjectURL(manifestBlob);
+      document.head.appendChild(manifestLink);
+
+      // Service Worker dinâmico para cache offline
+      if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
+        const swCode = `
+          const CACHE_NAME = 'estoque-rapido-cache-v1';
+          self.addEventListener('install', event => {
+            self.skipWaiting();
+            event.waitUntil(
+              caches.open(CACHE_NAME).then(cache => cache.addAll(['./']).catch(() => {}))
+            );
+          });
+          self.addEventListener('activate', event => {
+            event.waitUntil(self.clients.claim());
+          });
+          self.addEventListener('fetch', event => {
+            if (event.request.method !== 'GET') return;
+            event.respondWith(
+              caches.match(event.request).then(cached => {
+                const fetchPromise = fetch(event.request).then(networkResponse => {
+                  if (networkResponse && networkResponse.status === 200) {
+                    const clone = networkResponse.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                  }
+                  return networkResponse;
+                }).catch(() => cached);
+                return cached || fetchPromise;
+              })
+            );
+          });
+        `;
+        const swBlob = new Blob([swCode], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(swBlob);
+        navigator.serviceWorker.register(swUrl).catch(() => {
+          // Alguns ambientes sandbox bloqueiam SW via Blob URL, mas o app continua funcionando 100% via localStorage
+        });
+      }
+
+      // Captura do prompt de instalação nativa
+      let deferredPrompt;
+      const installBtn = document.getElementById('btn-install-pwa');
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        installBtn.classList.remove('hidden');
+      });
+
+      installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          installBtn.classList.add('hidden');
+        }
+        deferredPrompt = null;
+      });
+    }
+
+    // Inicialização ao carregar a página
+    window.addEventListener('DOMContentLoaded', () => {
+      loadProducts();
+      initPWA();
+    });
+  </script>
+</body>
+</html>
